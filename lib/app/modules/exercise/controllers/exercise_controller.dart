@@ -11,11 +11,11 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 class ExerciseController extends GetxController {
   final isCameraInitialized = false.obs;
   var isProcessing = false;
-  late CameraController cameraController;
+  
+  CameraController? cameraController;
   late CameraDescription frontCamera;
 
-  // TFLite
-  late Interpreter interpreter;
+  Interpreter? interpreter;
   final RxList<List<double>> output = RxList<List<double>>([]);
 
   final int inputSize = 192;
@@ -23,45 +23,40 @@ class ExerciseController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // ================== PERBAIKAN LOGIKA DI SINI ==================
     loadModel().then((success) {
       if (success) {
-        // Hanya jalankan kamera JIKA model sukses di-load
         initializeCamera();
       } else {
         log("GAGAL MEMUAT MODEL: Kamera tidak akan diinisialisasi.");
         Get.snackbar(
           "Initialization Error",
-          "Gagal memuat model AI. Silakan coba lagi.",
+          "Gagal memuat model AI. Pastikan file model ada.",
           backgroundColor: Colors.red,
           colorText: Colors.white,
         );
       }
     });
   }
-  // ===============================================================
 
   @override
   void onClose() {
-    if (isCameraInitialized.value && cameraController.value.isInitialized) {
-      cameraController.stopImageStream();
+    if (cameraController != null && cameraController!.value.isInitialized) {
+      cameraController!.stopImageStream();
+      cameraController!.dispose();
     }
-    cameraController.dispose();
-    interpreter.close();
+    interpreter?.close();
     super.onClose();
   }
 
-  // ================== FUNGSI INI SEKARANG MENGEMBALIKAN BOOLEAN ==================
   Future<bool> loadModel() async {
     try {
-      // Kita tidak lagi meminta GPU, biarkan TFLite pakai CPU default
-      interpreter = await Interpreter.fromAsset(
-        'assets/movenet_lightning.tflite',
-      );
+      interpreter = await Interpreter.fromAsset('assets/movenet_lightning.tflite');
       log('Model loaded successfully');
       return true;
     } catch (e) {
-      log('Error loading model: $e');
+      log('=== ERROR SAAT LOAD MODEL ===');
+      log('Error: $e');
+      log('=============================');
       return false;
     }
   }
@@ -80,10 +75,10 @@ class ExerciseController extends GetxController {
         imageFormatGroup: ImageFormatGroup.yuv420,
       );
 
-      await cameraController.initialize();
+      await cameraController!.initialize();
       isCameraInitialized.value = true;
 
-      cameraController.startImageStream((image) {
+      cameraController!.startImageStream((image) {
         if (!isProcessing) {
           isProcessing = true;
           runModelOnFrame(image);
@@ -95,6 +90,8 @@ class ExerciseController extends GetxController {
   }
 
   void runModelOnFrame(CameraImage image) {
+      if (interpreter == null) return;
+
       var processedImage = preprocessImage(image);
       if (processedImage == null) {
           isProcessing = false;
@@ -106,7 +103,7 @@ class ExerciseController extends GetxController {
       var reshapedInput = inputTensor.reshape([1, inputSize, inputSize, 3]);
 
       var outputBuffer = List.filled(1 * 1 * 17 * 3, 0.0).reshape([1, 1, 17, 3]);
-      interpreter.run(reshapedInput, outputBuffer);
+      interpreter!.run(reshapedInput, outputBuffer);
 
       List<List<double>> keypoints = [];
       for (int i = 0; i < 17; i++) {
@@ -119,25 +116,25 @@ class ExerciseController extends GetxController {
               keypoints.add([-1.0, -1.0]);
           }
       }
-
-      if (keypoints.any((p) => p[0] != -1.0)) {
-          log('Detected keypoints: $keypoints');
-      }
       
       output.value = keypoints;
       isProcessing = false;
   }
   
+  // ================== PERUBAHAN UTAMA DI SINI ==================
   img.Image? preprocessImage(CameraImage cameraImage) {
+    // ... (kode konversi YUV ke RGB tetap sama)
     final width = cameraImage.width;
     final height = cameraImage.height;
     final yuv420 = cameraImage.planes;
+    if (yuv420.length < 3) return null;
+
     final yPlane = yuv420[0].bytes;
     final uPlane = yuv420[1].bytes;
     final vPlane = yuv420[2].bytes;
     final yStride = yuv420[0].bytesPerRow;
     final uvStride = yuv420[1].bytesPerRow;
-    final uvPixelStride = yuv420[1].bytesPerPixel!;
+    final uvPixelStride = yuv420[1].bytesPerPixel ?? 1;
     
     final image = img.Image(width: width, height: height);
 
@@ -145,6 +142,8 @@ class ExerciseController extends GetxController {
       for (int x = 0; x < width; x++) {
         final yIndex = y * yStride + x;
         final uvIndex = (y ~/ 2) * uvStride + (x ~/ 2) * uvPixelStride;
+        
+        if (yIndex >= yPlane.length || uvIndex >= uPlane.length || uvIndex >= vPlane.length) continue;
         
         final yValue = yPlane[yIndex];
         final uValue = uPlane[uvIndex];
@@ -158,6 +157,12 @@ class ExerciseController extends GetxController {
       }
     }
     
-    return img.copyResize(image, width: inputSize, height: inputSize);
+    // **TAMBAHAN: LAKUKAN ROTASI GAMBAR DI SINI**
+    // Karena kamera depan, kita putar -90 derajat (berlawanan arah jarum jam)
+    final rotatedImage = img.copyRotate(image, angle: -90);
+    
+    // Resize gambar yang SUDAH DIPUTAR
+    return img.copyResize(rotatedImage, width: inputSize, height: inputSize);
   }
+  // ===============================================================
 }

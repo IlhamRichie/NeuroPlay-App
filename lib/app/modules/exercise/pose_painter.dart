@@ -34,9 +34,9 @@ class PosePainter extends CustomPainter {
 
     // Gambar semua titik keypoints
     for (var point in keypoints) {
-      if (point[0] != -1.0) { // Hanya gambar jika terdeteksi
-        // Koordinat dari model adalah [0,1]. Kita ubah ke ukuran layar.
-        final double x = point[1] * size.width;
+      if (point[0] != -1.0) {
+        // Balik koordinat X untuk efek cermin
+        final double x = (1.0 - point[1]) * size.width; 
         final double y = point[0] * size.height;
         canvas.drawCircle(Offset(x, y), 3, paint);
       }
@@ -52,16 +52,16 @@ class PosePainter extends CustomPainter {
       final endPoint = keypoints[connection[1]];
 
       if (startPoint[0] != -1.0 && endPoint[0] != -1.0) {
-        final double startX = startPoint[1] * size.width;
+        // Balik juga koordinat X di sini
+        final double startX = (1.0 - startPoint[1]) * size.width;
         final double startY = startPoint[0] * size.height;
-        final double endX = endPoint[1] * size.width;
+        final double endX = (1.0 - endPoint[1]) * size.width;
         final double endY = endPoint[0] * size.height;
 
         canvas.drawLine(Offset(startX, startY), Offset(endX, endY), linePaint);
       }
     }
   }
-
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
     return true; // Selalu repaint agar animasi mulus

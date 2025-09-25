@@ -1,6 +1,7 @@
 // lib/app/modules/exercise/exercise_controller.dart
 
 import 'dart:developer';
+import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -8,17 +9,22 @@ import 'package:image/image.dart' as img;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
+// Enum untuk melacak status latihan
+enum ExerciseStage { down, up }
+
 class ExerciseController extends GetxController {
   final isCameraInitialized = false.obs;
   var isProcessing = false;
-  
   CameraController? cameraController;
   late CameraDescription frontCamera;
-
   Interpreter? interpreter;
   final RxList<List<double>> output = RxList<List<double>>([]);
-
   final int inputSize = 192;
+
+  // Variabel baru untuk game
+  final RxInt repetitionCount = 0.obs;
+  final Rx<ExerciseStage> stage = ExerciseStage.down.obs;
+  final RxBool isCorrectPose = false.obs;
 
   @override
   void onInit() {
@@ -50,7 +56,8 @@ class ExerciseController extends GetxController {
 
   Future<bool> loadModel() async {
     try {
-      interpreter = await Interpreter.fromAsset('assets/movenet_lightning.tflite');
+      interpreter =
+          await Interpreter.fromAsset('assets/movenet_lightning.tflite');
       log('Model loaded successfully');
       return true;
     } catch (e) {
@@ -89,6 +96,24 @@ class ExerciseController extends GetxController {
     }
   }
 
+  // Fungsi baru untuk menghitung sudut antara 3 titik
+  double calculateAngle(List<double> p1, List<double> p2, List<double> p3) {
+    if (p1[0] == -1.0 || p2[0] == -1.0 || p3[0] == -1.0) return 0.0;
+
+    final y1 = p1[0], x1 = p1[1];
+    final y2 = p2[0], x2 = p2[1];
+    final y3 = p3[0], x3 = p3[1];
+    
+    // UBAH DI SINI: gunakan math.atan2 dan math.pi
+    double angle = (math.atan2(y3 - y2, x3 - x2) - math.atan2(y1 - y2, x1 - x2)) * (180 / math.pi);
+    
+    if (angle < 0) {
+      angle += 360;
+    }
+    
+    return angle > 180 ? 360 - angle : angle;
+  }
+
   void runModelOnFrame(CameraImage image) {
       if (interpreter == null) return;
 
@@ -118,12 +143,35 @@ class ExerciseController extends GetxController {
       }
       
       output.value = keypoints;
+
+      if (keypoints.length >= 17) {
+        final rightShoulder = keypoints[6];
+        final rightElbow = keypoints[8];
+        final rightWrist = keypoints[10];
+
+        double elbowAngle = calculateAngle(rightShoulder, rightElbow, rightWrist);
+        
+        if (elbowAngle > 160) {
+          isCorrectPose.value = true;
+          if (stage.value == ExerciseStage.down) {
+            repetitionCount.value++;
+            stage.value = ExerciseStage.up;
+          }
+        } 
+        else if (elbowAngle < 30) {
+          isCorrectPose.value = true;
+          stage.value = ExerciseStage.down;
+        } 
+        else {
+          isCorrectPose.value = false;
+        }
+      }
+
       isProcessing = false;
   }
-  
+
   // ================== PERUBAHAN UTAMA DI SINI ==================
   img.Image? preprocessImage(CameraImage cameraImage) {
-    // ... (kode konversi YUV ke RGB tetap sama)
     final width = cameraImage.width;
     final height = cameraImage.height;
     final yuv420 = cameraImage.planes;
@@ -157,11 +205,8 @@ class ExerciseController extends GetxController {
       }
     }
     
-    // **TAMBAHAN: LAKUKAN ROTASI GAMBAR DI SINI**
-    // Karena kamera depan, kita putar -90 derajat (berlawanan arah jarum jam)
     final rotatedImage = img.copyRotate(image, angle: -90);
     
-    // Resize gambar yang SUDAH DIPUTAR
     return img.copyResize(rotatedImage, width: inputSize, height: inputSize);
   }
   // ===============================================================

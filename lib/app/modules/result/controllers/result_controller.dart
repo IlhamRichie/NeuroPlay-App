@@ -1,23 +1,13 @@
+// lib/app/modules/result/result_controller.dart
 import 'package:get/get.dart';
 
 class ResultController extends GetxController {
-  //TODO: Implement ResultController
+  late int finalScore;
 
-  final count = 0.obs;
   @override
   void onInit() {
     super.onInit();
+    // Ambil data skor yang dikirim dari halaman sebelumnya
+    finalScore = Get.arguments ?? 0;
   }
-
-  @override
-  void onReady() {
-    super.onReady();
-  }
-
-  @override
-  void onClose() {
-    super.onClose();
-  }
-
-  void increment() => count.value++;
 }

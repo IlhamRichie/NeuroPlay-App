@@ -1,10 +1,9 @@
 // lib/app/modules/exercise/exercise_controller.dart
 
 import 'dart:async';
-import '../../../routes/app_pages.dart';
 import 'dart:developer';
 import 'dart:math' as math;
-import 'package:audioplayers/audioplayers.dart'; // Pastikan import ini ada
+import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -12,7 +11,8 @@ import 'package:image/image.dart' as img;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
-// Enum untuk melacak status latihan
+import '../../../routes/app_pages.dart';
+
 enum ExerciseStage { down, up }
 
 class ExerciseController extends GetxController {
@@ -37,6 +37,9 @@ class ExerciseController extends GetxController {
 
   // Variabel audio
   final AudioPlayer audioPlayer = AudioPlayer();
+
+  // Variabel game "Burung Terbang"
+  final RxDouble birdFlightProgress = 0.0.obs;
 
   @override
   void onInit() {
@@ -80,13 +83,10 @@ class ExerciseController extends GetxController {
     }
   }
 
-  // ================== FUNGSI-FUNGSI YANG DIPINDAHKAN KE SINI ==================
   Future<void> initializeCameraAndStartCountdown() async {
     if (await Permission.camera.request().isGranted) {
       final cameras = await availableCameras();
-      frontCamera = cameras.firstWhere(
-        (camera) => camera.lensDirection == CameraLensDirection.front,
-      );
+      frontCamera = cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.front);
       cameraController = CameraController(
         frontCamera,
         ResolutionPreset.medium,
@@ -121,7 +121,6 @@ class ExerciseController extends GetxController {
       }
     });
   }
-  // =======================================================================
 
   double calculateAngle(List<double> p1, List<double> p2, List<double> p3) {
     if (p1[0] == -1.0 || p2[0] == -1.0 || p3[0] == -1.0) return 0.0;
@@ -129,14 +128,15 @@ class ExerciseController extends GetxController {
     final y2 = p2[0], x2 = p2[1];
     final y3 = p3[0], x3 = p3[1];
     double angle = (math.atan2(y3 - y2, x3 - x2) - math.atan2(y1 - y2, x1 - x2)) * (180 / math.pi);
-    if (angle < 0) {
-      angle += 360;
-    }
+    if (angle < 0) angle += 360;
     return angle > 180 ? 360 - angle : angle;
   }
 
   void runModelOnFrame(CameraImage image) {
-    if (interpreter == null) return;
+    if (interpreter == null) {
+      isProcessing = false;
+      return;
+    }
     var processedImage = preprocessImage(image);
     if (processedImage == null) {
       isProcessing = false;
@@ -151,43 +151,53 @@ class ExerciseController extends GetxController {
     for (int i = 0; i < 17; i++) {
       double score = outputBuffer[0][0][i][2];
       if (score > 0.3) {
-        double y = outputBuffer[0][0][i][0];
-        double x = outputBuffer[0][0][i][1];
-        keypoints.add([y, x]);
+        keypoints.add([outputBuffer[0][0][i][0], outputBuffer[0][0][i][1]]);
       } else {
         keypoints.add([-1.0, -1.0]);
       }
     }
     output.value = keypoints;
 
+    // ================== LOGIKA STATE MACHINE BARU YANG LEBIH KETAT ==================
     if (keypoints.length >= 17) {
       final rightShoulder = keypoints[6];
       final rightElbow = keypoints[8];
       final rightWrist = keypoints[10];
       double elbowAngle = calculateAngle(rightShoulder, rightElbow, rightWrist);
-      if (elbowAngle > 160) {
-        isCorrectPose.value = true; // Set pose benar saat tangan lurus
-        if (stage.value == ExerciseStage.down) {
-          repetitionCount.value++;
-          stage.value = ExerciseStage.up;
-          audioPlayer.play(AssetSource('assets/correct_beep.mp3'));
-          if (repetitionCount.value >= targetRepetitions) {
-            cameraController?.stopImageStream();
-            Get.offNamed(Routes.RESULT, arguments: repetitionCount.value);
-          }
-        }
-      } else if (elbowAngle < 30) {
-        isCorrectPose.value = true; // Set pose benar juga saat tangan menekuk
-        stage.value = ExerciseStage.down;
+
+      // Logika untuk feedback visual (border hijau)
+      if (elbowAngle > 160 || elbowAngle < 30) {
+        isCorrectPose.value = true;
       } else {
         isCorrectPose.value = false;
       }
+
+      // Logika untuk menghitung repetisi
+      // Jika status sedang 'turun' dan tangan menjadi 'lurus'
+      if (stage.value == ExerciseStage.down && elbowAngle > 160) {
+        // HITUNG REPETISI & PINDAH KE STATUS 'NAIK'
+        repetitionCount.value++;
+        stage.value = ExerciseStage.up;
+        audioPlayer.play(AssetSource('sounds/correct_beep.mp3'));
+        birdFlightProgress.value = repetitionCount.value / targetRepetitions;
+
+        if (repetitionCount.value >= targetRepetitions) {
+          cameraController?.stopImageStream();
+          Get.offNamed(Routes.RESULT, arguments: repetitionCount.value);
+        }
+      } 
+      // Jika status sedang 'naik' dan tangan kembali 'menekuk'
+      else if (stage.value == ExerciseStage.up && elbowAngle < 30) {
+        // RESET STATUS KE 'TURUN', SIAP UNTUK REPETISI BERIKUTNYA
+        stage.value = ExerciseStage.down;
+      }
     }
+    // ==============================================================================
+
     isProcessing = false;
   }
 
   img.Image? preprocessImage(CameraImage cameraImage) {
-    // ... (Fungsi ini tidak perlu diubah, biarkan seperti adanya)
     final width = cameraImage.width;
     final height = cameraImage.height;
     final yuv420 = cameraImage.planes;
@@ -203,17 +213,14 @@ class ExerciseController extends GetxController {
       for (int x = 0; x < width; x++) {
         final yIndex = y * yStride + x;
         final uvIndex = (y ~/ 2) * uvStride + (x ~/ 2) * uvPixelStride;
-        if (yIndex >= yPlane.length ||
-            uvIndex >= uPlane.length ||
-            uvIndex >= vPlane.length) continue;
+        if (yIndex >= yPlane.length || uvIndex >= uPlane.length || uvIndex >= vPlane.length) continue;
         final yValue = yPlane[yIndex];
         final uValue = uPlane[uvIndex];
         final vValue = vPlane[uvIndex];
         final r = yValue + 1.13983 * (vValue - 128);
         final g = yValue - 0.39465 * (uValue - 128) - 0.58060 * (vValue - 128);
         final b = yValue + 2.03211 * (uValue - 128);
-        image.setPixelRgb(x, y, r.toInt().clamp(0, 255),
-            g.toInt().clamp(0, 255), b.toInt().clamp(0, 255));
+        image.setPixelRgb(x, y, r.toInt().clamp(0, 255), g.toInt().clamp(0, 255), b.toInt().clamp(0, 255));
       }
     }
     final rotatedImage = img.copyRotate(image, angle: -90);

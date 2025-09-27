@@ -63,7 +63,7 @@ NeuroPlay mengubah latihan fisioterapi yang membosankan menjadi permainan intera
 
 * **M. Ilham Rigan Agachi** - AI & Flutter Development
 * **Nanda Fridiani Bintoro** - Research & Product
-* **Nayarana Eka Candra** - UI/UX Design
+* **Nayarana Eka Candra** - Research & Product
 * **Putri Ajeng Imamah** - Data & Logic
 
 ---

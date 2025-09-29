@@ -1,0 +1,76 @@
+{
+  "project_info": {
+    "project_number": "646959857961",
+    "project_id": "neuroplay-app",
+    "storage_bucket": "neuroplay-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:646959857961:android:1d65ed672b290384913738",
+        "android_client_info": {
+          "package_name": "com.example.neuroplay"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "646959857961-ju77sif3bqak96u1e272eqruflnlj9b7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfD3BfFNLjrdYenupYkwh8h0H_XO5EQJk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "646959857961-ju77sif3bqak96u1e272eqruflnlj9b7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:646959857961:android:6f3cb2f93ef20b53913738",
+        "android_client_info": {
+          "package_name": "com.rigandev.neuroplay"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "646959857961-52567hvv6tlcpckqjf49aopok2ul3es5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rigandev.neuroplay",
+            "certificate_hash": "09be67b5080aa70a4f0f7aae51ac508d160772ff"
+          }
+        },
+        {
+          "client_id": "646959857961-ju77sif3bqak96u1e272eqruflnlj9b7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfD3BfFNLjrdYenupYkwh8h0H_XO5EQJk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "646959857961-ju77sif3bqak96u1e272eqruflnlj9b7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
